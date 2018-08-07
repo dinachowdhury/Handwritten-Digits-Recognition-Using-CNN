@@ -1,0 +1,104 @@
+>>> import tensorflow as tf
+>>> import math
+>>> import os
+>>> import numpy as np
+>>> import matplotlib.pyplot as plt
+>>> mnist_graph = tf.Graph()
+>>> from tensorflow.examples.tutorials.mnist import input_data
+>>> mnist = input_data.read_data_sets("/tmp/data/", one_hot = True)
+
+
+>>> keep_prob = tf.placeholder(tf.float32)
+>>> keep_rate =0.8
+
+>>> x = tf.placeholder(tf.float32, [None, 784])
+>>> y_= tf.placeholder (tf.float32)
+
+
+>>> def conv2d(x, W):
+  return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
+>>> def max_pool_2d(x):
+  return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
+
+def convolutional_neural_network(x):
+    weights = {'W_conv1':tf.Variable(tf.random_normal([5,5,1,32])),
+               'W_conv2':tf.Variable(tf.random_normal([5,5,32,64])),
+               'W_fc':tf.Variable(tf.random_normal([7*7*64,1024])),
+               'out':tf.Variable(tf.random_normal([1024, 10]))}
+
+    biases = {'b_conv1':tf.Variable(tf.random_normal([32])),
+               'b_conv2':tf.Variable(tf.random_normal([64])),
+               'b_fc':tf.Variable(tf.random_normal([1024])),
+               'out':tf.Variable(tf.random_normal([10]))}
+
+    x = tf.reshape(x, shape=[-1, 28, 28, 1])
+
+    conv1 = tf.nn.relu(conv2d(x, weights['W_conv1']) + biases['b_conv1'])
+    conv1 = max_pool_2d(conv1)
+    
+    conv2 = tf.nn.relu(conv2d(conv1, weights['W_conv2']) + biases['b_conv2'])
+    conv2 = max_pool_2d(conv2)
+
+    fc = tf.reshape(conv2,[-1, 7*7*64])
+    fc = tf.nn.relu(tf.matmul(fc, weights['W_fc'])+biases['b_fc'])
+    fc = tf.nn.dropout(fc, keep_rate)
+
+    output = tf.matmul(fc, weights['out'])+biases['out']
+
+    return output
+
+def train_neural_network(x):
+    prediction = convolutional_neural_network(x)
+    cross_entropy = tf.reduce_mean( tf.nn.softmax_cross_entropy_with_logits(logits= prediction,labels= y_) )
+    train_step = tf.train.AdamOptimizer().minimize(cross_entropy)
+
+    hm_steps = 10
+    with tf.Session() as sess:
+	    sess.run(tf.global_variables_initializer())
+	    for steps in range(hm_steps):
+		    steps_loss = 0
+		    for _ in range(10):
+			    steps_x, steps_y = mnist.train.next_batch(50)
+			    _, c = sess.run([train_step, cross_entropy], feed_dict={x: steps_x, y_: steps_y})
+			    steps_loss += c
+		    print('Steps', steps, 'completed out of',hm_steps,'loss: ',steps_loss)
+	    correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(y_, 1))
+	    accuracy = tf.reduce_mean(tf.cast(correct, 'float'))
+	    print('Accuracy:',accuracy.eval(feed_dict={x: mnist.test.images, y_:mnist.test.labels}))
+	    
+train_neural_network(x)
+
+>>> mnist_graph = tf.Graph()
+>>> with mnist_graph.as_default():
+    x = tf.placeholder(tf.float32,[None,784])                                       
+    y_ = tf.placeholder(tf.float32)
+    tf.add_to_collection("images", x)  
+    tf.add_to_collection("labels", y_)  
+    prediction = convolutional_neural_network(x)
+    tf.add_to_collection("logits", prediction)  
+    saver = tf.train.Saver()
+    
+>>> with tf.Session(graph=tf.Graph()) as sess:
+    TRAIN_DIR= "mnist"
+    saver = tf.train.import_meta_graph(
+        os.path.join(TRAIN_DIR, "checkpoint-1999.meta"))
+    saver.restore(
+        sess, os.path.join(TRAIN_DIR, "checkpoint-1999"))
+    
+    output = tf.get_collection("logits")[0]
+    x = tf.get_collection("images")[0]
+    y_ = tf.get_collection("labels")[0]
+    
+    eval_op = tf.nn.top_k(output)
+   
+    images_feed, labels_feed = mnist.validation.next_batch(1)
+    imgplot = plt.imshow(np.reshape(images_feed, (28, 28)))
+    plt.show()
+    p1 = sess.run(eval_op,feed_dict={x: images_feed, y_: labels_feed})
+    print("Ground truth: %s\nPrediction: %s" % (labels_feed, p1.indices[0][0]))
+
+Reference:
+    1.https://pythonprogramming.net/cnn-tensorflow-convolutional-nerual-network-machine-learning-tutorial/
+    2.https://github.com/maniraniyal/demo/blob/master/2_mnist.ipynb
+    
